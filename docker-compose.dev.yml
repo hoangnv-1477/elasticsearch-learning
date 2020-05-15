@@ -1,0 +1,101 @@
+version: '3'
+services:
+  db:
+    image: mysql:8.0.20
+    command: mysqld --default-authentication-plugin=mysql_native_password
+    env_file: .env
+    volumes:
+      - elasticsearch-learning-db:/var/lib/mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DATABASE_PASSWORD}
+  es1:
+    image: elasticsearch:7.7.0
+    container_name: es1
+    environment:
+      - node.name=es1
+      - cluster.name=es-docker-cluster
+      - discovery.seed_hosts=es2,es3
+      - script.painless.regex.enabled=true
+      - cluster.initial_master_nodes=es1,es2,es3
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es1:/usr/share/elasticsearch/data
+    ports:
+      - 9300:9200
+    networks:
+      - elastic
+  es2:
+    image: elasticsearch:7.7.0
+    container_name: es2
+    environment:
+      - node.name=es2
+      - cluster.name=es-docker-cluster
+      - discovery.seed_hosts=es1,es3
+      - script.painless.regex.enabled=true
+      - cluster.initial_master_nodes=es1,es2,es3
+      - http.port=9200
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es2:/usr/share/elasticsearch/data
+    networks:
+      - elastic
+  es3:
+    image: elasticsearch:7.7.0
+    container_name: es3
+    environment:
+      - node.name=es3
+      - cluster.name=es-docker-cluster
+      - discovery.seed_hosts=es1,es2
+      - script.painless.regex.enabled=true
+      - cluster.initial_master_nodes=es1,es2,es3
+      - http.port=9200
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es3:/usr/share/elasticsearch/data
+    networks:
+      - elastic
+  kib:
+    image: docker.elastic.co/kibana/kibana:7.7.0
+    container_name: kib
+    ports:
+      - 5601:5601
+    environment:
+      ELASTICSEARCH_URL: http://es1:9200
+      ELASTICSEARCH_HOSTS: http://es1:9200
+    networks:
+      - elastic
+  app:
+    build:
+      context: .
+      dockerfile: docker/ruby/Dockerfile
+    command: docker/ruby/entrypoint.sh
+    volumes:
+      - .:/app
+      - bundle:/bundle
+    env_file: .env
+    ports:
+      - "3000:3000"
+volumes:
+  es1:
+  es2:
+  es3:
+  elasticsearch-learning-db:
+  bundle:
+networks:
+  elastic:
+    driver: bridge
